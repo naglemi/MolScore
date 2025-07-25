@@ -38,8 +38,15 @@ class Model:
         method: str,
         binarise: bool,
         n_jobs: int,
+        data_dir: str = None,
         **kwargs,
     ):
+        # Set PYSTOW_HOME if data_dir is provided
+        if data_dir:
+            import os
+            os.environ["PYSTOW_HOME"] = data_dir
+            logger.info(f"Using custom PIDGIN data directory: {data_dir}")
+        
         self.uniprots = uniprots
         self.thresh = thresh
         self.full_thresh = re.sub("01", "0.1", thresh)
@@ -172,6 +179,12 @@ def get_args():
         "--binarise",
         action="store_true",
         help="Binarise predicted probability and return ratio of actives based on optimal predictive thresholds (GHOST)",
+    )
+    parser.add_argument(
+        "--data_dir",
+        type=str,
+        default=None,
+        help="Custom directory for PIDGIN data (default: uses PYSTOW_HOME or ~/.pidgin_data)",
     )
     return parser.parse_args()
 

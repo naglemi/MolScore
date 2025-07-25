@@ -74,13 +74,21 @@ class PIDGIN(BaseServerSF):
         n_jobs: int = 1,
         method: str = "mean",
         binarise=False,
+        data_dir: str = None,
+        skip_env_check: bool = False,
         **kwargs,
     ):
         """This docstring is must be populated by calling PIDGIN.set_docstring() first."""
+        # Store skip_env_check for later use
+        self.skip_env_check = skip_env_check
+        
+        # Use provided data_dir or default to HOME/.pidgin_data
+        self.data_dir = data_dir or os.path.join(os.environ["HOME"], ".pidgin_data")
+        
         # Check if .pidgin_data exists
-        if not utils.check_path(os.path.join(os.environ["HOME"], ".pidgin_data")):
+        if not utils.check_path(self.data_dir):
             logger.warning(
-                f"{os.path.join(os.environ['HOME'], '.pidgin_data')} not found, PIDGINv5 (11GB) will be download which may take several minutes"
+                f"{self.data_dir} not found, PIDGINv5 (11GB) will be download which may take several minutes"
             )
         # Make sure something is selected
         self.uniprot = uniprot if uniprot != "None" else None
@@ -118,6 +126,7 @@ class PIDGIN(BaseServerSF):
             "method": self.method,
             "n_jobs": self.n_jobs,
             "uniprots": " ".join(self.uniprots),
+            "data_dir": self.data_dir,  # Pass data directory to server
         }
         if self.binarise:
             server_kwargs["binarise"] = ""
@@ -135,3 +144,10 @@ class PIDGIN(BaseServerSF):
             server_grace=600,
             server_kwargs=server_kwargs,
         )
+    
+    def _check_env(self):
+        """Override to respect skip_env_check flag"""
+        if self.skip_env_check:
+            logger.info(f"Skipping environment check for {self.env_name} (skip_env_check=True)")
+            return True
+        return super()._check_env()
