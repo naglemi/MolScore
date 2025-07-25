@@ -2,15 +2,10 @@ import argparse
 import gzip
 import json
 import logging
-import os
 import pickle as pkl
 import re
 import zipfile
 from functools import partial
-
-# Set PYSTOW_HOME before importing to avoid read-only filesystem issues
-if "PYSTOW_HOME" not in os.environ:
-    os.environ["PYSTOW_HOME"] = "/tmp/.pystow"
 
 import numpy as np
 from flask import Flask, jsonify, request
