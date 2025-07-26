@@ -82,8 +82,8 @@ class PIDGIN(BaseServerSF):
         # Store skip_env_check for later use
         self.skip_env_check = skip_env_check
         
-        # Use provided data_dir or default to HOME/.pidgin_data
-        self.data_dir = data_dir or os.path.join(os.environ["HOME"], ".pidgin_data")
+        # Use provided data_dir or default to working directory
+        self.data_dir = data_dir or os.path.join(os.getcwd(), ".pidgin_data")
         
         # Check if .pidgin_data exists
         if not utils.check_path(self.data_dir):
@@ -126,7 +126,7 @@ class PIDGIN(BaseServerSF):
             "method": self.method,
             "n_jobs": self.n_jobs,
             "uniprots": " ".join(self.uniprots),
-            "data_dir": self.data_dir,  # Pass data directory to server
+            # data_dir removed - hardcoded in server
         }
         if self.binarise:
             server_kwargs["binarise"] = ""
@@ -141,7 +141,7 @@ class PIDGIN(BaseServerSF):
             server_path=resources.files("molscore.scoring_functions.servers").joinpath(
                 "pidgin_server.py"
             ),
-            server_grace=600,
+            server_grace=30,
             server_kwargs=server_kwargs,
         )
     

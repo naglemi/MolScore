@@ -2,14 +2,13 @@ import argparse
 import gzip
 import json
 import logging
+import os
 import pickle as pkl
 import re
-import zipfile
 from functools import partial
 
 import numpy as np
 from flask import Flask, jsonify, request
-from pidgin_utils import Zenodo
 from utils import Fingerprints, Pool
 
 logger = logging.getLogger("pidgin_server")
@@ -28,8 +27,8 @@ class Model:
     Create a Model object that loads models once, for example.
     """
 
-    zenodo = Zenodo(access_token="0")
-    pidgin_record_id = "7547691"
+    # Fixed path where models are always located - use working directory
+    PIDGIN_DATA_DIR = os.path.join(os.getcwd(), ".pidgin_data")
 
     def __init__(
         self,
@@ -38,14 +37,8 @@ class Model:
         method: str,
         binarise: bool,
         n_jobs: int,
-        data_dir: str = None,
         **kwargs,
     ):
-        # Set PYSTOW_HOME if data_dir is provided
-        if data_dir:
-            import os
-            os.environ["PYSTOW_HOME"] = data_dir
-            logger.info(f"Using custom PIDGIN data directory: {data_dir}")
         
         self.uniprots = uniprots
         self.thresh = thresh
@@ -61,34 +54,51 @@ class Model:
         self.models = []
         self.model_names = []
 
-        # Load models
-        pidgin_path = self.zenodo.download(
-            record_id=self.pidgin_record_id, name="trained_models.zip"
-        )
-        with zipfile.ZipFile(pidgin_path, "r") as zip_file:
-            for uni in self.uniprots:
-                try:
-                    # Load .json to get ghost thresh
-                    with zip_file.open(f"{uni}.json") as meta_file:
-                        metadata = json.load(meta_file)
-                        # reformart thresh back
-                        opt_thresh = metadata[self.full_thresh]["train"]["params"][
-                            "opt_threshold"
-                        ]
-                        self.ghost_thresholds.append(opt_thresh)
-                    # Load classifier
-                    with zip_file.open(f"{uni}_{self.thresh}.pkl.gz") as model_file:
-                        with gzip.open(model_file, "rb") as f:
-                            clf = pkl.load(f)
-                            self.models.append(clf)
-                            self.model_names.append(f"{uni}@{self.thresh}")
-                except (FileNotFoundError, KeyError):
-                    logger.warning(f"{uni} model at {thresh} not found, omitting")
-                    continue
+        # Load models from extracted files  
+        if not os.path.exists(self.PIDGIN_DATA_DIR):
+            raise RuntimeError(
+                f"CRITICAL: PIDGIN model directory not found at {self.PIDGIN_DATA_DIR}/\n"
+                f"Container is broken - models must be pre-extracted during build."
+            )
+        
+        logger.info(f"Loading PIDGIN models from {self.PIDGIN_DATA_DIR}")
+        
+        for uni in self.uniprots:
+            # Load .json to get ghost thresh
+            json_path = os.path.join(self.PIDGIN_DATA_DIR, f"{uni}.json")
+            if not os.path.exists(json_path):
+                raise RuntimeError(
+                    f"CRITICAL: PIDGIN metadata not found: {json_path}\n"
+                    f"Container is broken - missing model files for UniProt {uni}"
+                )
+                
+            with open(json_path, "r") as meta_file:
+                metadata = json.load(meta_file)
+                opt_thresh = metadata[self.full_thresh]["train"]["params"]["opt_threshold"]
+                self.ghost_thresholds.append(opt_thresh)
+                
+            # Load classifier - handle .pkl.gz files as they exist in container
+            model_path = os.path.join(self.PIDGIN_DATA_DIR, f"{uni}_{self.thresh}.pkl.gz")
+            if not os.path.exists(model_path):
+                raise RuntimeError(
+                    f"CRITICAL: PIDGIN model not found: {model_path}\n"
+                    f"Container is broken - missing model for UniProt {uni} at threshold {self.thresh}"
+                )
+                
+            with gzip.open(model_path, "rb") as f:
+                clf = pkl.load(f)
+                self.models.append(clf)
+                self.model_names.append(f"{uni}@{self.thresh}")
 
         # Run some checks
-        if len(self.models) != 0:
-            logger.warning("No models were found")
+        if len(self.models) == 0:
+            raise RuntimeError(
+                f"CRITICAL: No PIDGIN models were loaded from {pidgin_path}\n"
+                f"This indicates the Singularity container is broken.\n"
+                f"Expected to find models for UniProts: {self.uniprots}\n"
+                f"The container must have pre-downloaded PIDGIN models at {self.PIDGIN_DATA_DIR}/\n"
+                f"Check that trained_models.zip contains the required UniProt models."
+            )
         if self.binarise:
             logger.info("Running with binarise=True so setting method=mean")
             self.agg = np.mean
@@ -179,12 +189,6 @@ def get_args():
         "--binarise",
         action="store_true",
         help="Binarise predicted probability and return ratio of actives based on optimal predictive thresholds (GHOST)",
-    )
-    parser.add_argument(
-        "--data_dir",
-        type=str,
-        default=None,
-        help="Custom directory for PIDGIN data (default: uses PYSTOW_HOME or ~/.pidgin_data)",
     )
     return parser.parse_args()
 

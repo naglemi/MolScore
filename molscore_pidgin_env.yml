@@ -1,7 +1,8 @@
-name: pidgin
+name: molscore_pidgin
 channels:
   - anaconda
   - conda-forge
+  - pytorch
 dependencies:
   - python=3.10
   - numpy=1.23.5
@@ -10,9 +11,15 @@ dependencies:
   - scipy=1.9.3
   - dask
   - seaborn
+  - pandas
+  - pyyaml
+  - flask
+  - filelock
+  - fsspec
+  - requests
+  - datamol
   - pip
   - pip:
-    - flask
     - func_timeout
     - python-Levenshtein
     - torch --index-url https://download.pytorch.org/whl/cu121
